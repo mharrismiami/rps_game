@@ -1,19 +1,10 @@
 let video;
 
-let faceMesh;
-let faceOptions = {
-  maxFaces: 1,
-  refineLandmarks: false,
-  flipped: false
-};
-let faces = [];
-
 let handPose;
 let hands = [];
 
 // GAME VARIABLES
 let gameState = "waiting";
-
 let countdownText = "";
 
 let player1Choice = "";
@@ -23,6 +14,11 @@ let player1Score = 0;
 let player2Score = 0;
 
 let roundWinner = "";
+
+// Used while reading hands after SHOOT
+let p1Samples = [];
+let p2Samples = [];
+let sampleInterval;
 
 
 // -------------------------------------
@@ -35,21 +31,8 @@ async function setup() {
 
   // CAMERA
   video = createCapture(VIDEO);
-
   video.size(640, 480);
-
   video.hide();
-
-
-  // FACE TRACKING
-  faceMesh = await ml5.faceMesh(faceOptions);
-
-  faceMesh.detectStart(
-    video,
-    (results) => {
-      faces = results;
-    }
-  );
 
 
   // HAND TRACKING
@@ -72,8 +55,25 @@ function draw() {
 
   background(220);
 
-  // CAMERA
-  image(video, 0, 0);
+
+  // =====================================
+  // MIRRORED / INVERTED CAMERA
+  // =====================================
+
+  push();
+
+  translate(width, 0);
+  scale(-1, 1);
+
+  image(
+    video,
+    0,
+    0,
+    width,
+    height
+  );
+
+  pop();
 
 
   // CENTER LINE
@@ -90,11 +90,9 @@ function draw() {
 
   // PLAYER LABELS
   noStroke();
-
   fill(255);
 
   textAlign(CENTER);
-
   textSize(20);
 
   text(
@@ -110,15 +108,15 @@ function draw() {
   );
 
 
-  // DRAW HAND POINTS
+  // HAND TRACKING DOTS
   drawHands();
 
 
-  // SHOW LIVE GESTURES
+  // LIVE GESTURES
   showGestures();
 
 
-  // WAITING SCREEN
+  // START SCREEN
   if (gameState === "waiting") {
 
     drawStartButton();
@@ -130,6 +128,14 @@ function draw() {
   if (gameState === "countdown") {
 
     drawCountdown();
+
+  }
+
+
+  // READING HANDS
+  if (gameState === "reading") {
+
+    drawReading();
 
   }
 
@@ -155,12 +161,24 @@ function drawHands() {
 
       for (let keypoint of hand.keypoints) {
 
+        /*
+          IMPORTANT:
+
+          The camera image is mirrored,
+          so the hand tracking X coordinate
+          must ALSO be mirrored.
+        */
+
+        let mirroredX =
+          width - keypoint.x;
+
+
         fill(255, 0, 0);
 
         noStroke();
 
         circle(
-          keypoint.x,
+          mirroredX,
           keypoint.y,
           8
         );
@@ -171,30 +189,34 @@ function drawHands() {
 
 
 // -------------------------------------
-// FIND PLAYER 1 AND PLAYER 2 HAND
+// FIND PLAYER HANDS
 // -------------------------------------
 
 function getPlayerHands() {
 
   let player1Hand = null;
-
   let player2Hand = null;
 
 
   for (let hand of hands) {
 
-    // Wrist
-    let wrist = hand.keypoints[0];
+    let wrist =
+      hand.keypoints[0];
 
 
-    // LEFT SIDE OF CAMERA
-    if (wrist.x < width / 2) {
+    // Mirror the hand position
+    let mirroredX =
+      width - wrist.x;
+
+
+    // PLAYER 1 = LEFT SIDE
+    if (mirroredX < width / 2) {
 
       player1Hand = hand;
 
     }
 
-    // RIGHT SIDE OF CAMERA
+    // PLAYER 2 = RIGHT SIDE
     else {
 
       player2Hand = hand;
@@ -211,7 +233,7 @@ function getPlayerHands() {
 
 
 // -------------------------------------
-// DISTANCE BETWEEN TWO POINTS
+// DISTANCE
 // -------------------------------------
 
 function pointDistance(point1, point2) {
@@ -226,7 +248,7 @@ function pointDistance(point1, point2) {
 
 
 // -------------------------------------
-// DETECT ROCK / PAPER / SCISSORS
+// ROCK / PAPER / SCISSORS DETECTION
 // -------------------------------------
 
 function getGesture(hand) {
@@ -245,36 +267,21 @@ function getGesture(hand) {
   let wrist = p[0];
 
 
-  // BASE OF EACH FINGER
-
+  // FINGER BASES
   let indexBase = p[5];
-
   let middleBase = p[9];
-
   let ringBase = p[13];
-
   let pinkyBase = p[17];
 
 
   // FINGER TIPS
-
   let indexTip = p[8];
-
   let middleTip = p[12];
-
   let ringTip = p[16];
-
   let pinkyTip = p[20];
 
 
-  /*
-    Compare each fingertip's distance from the wrist
-    to the finger base's distance from the wrist.
-
-    This works better than just checking Y position
-    because the hand can be tilted.
-  */
-
+  // CHECK IF FINGERS ARE EXTENDED
 
   let indexExtended =
     pointDistance(indexTip, wrist) >
@@ -297,9 +304,9 @@ function getGesture(hand) {
 
 
 
-  // ---------------------------------
-  // SCISSORS ✌
-  // ---------------------------------
+  // =====================================
+  // SCISSORS
+  // =====================================
 
   if (
     indexExtended &&
@@ -313,9 +320,9 @@ function getGesture(hand) {
   }
 
 
-  // ---------------------------------
-  // PAPER ✋
-  // ---------------------------------
+  // =====================================
+  // PAPER
+  // =====================================
 
   if (
     indexExtended &&
@@ -329,9 +336,9 @@ function getGesture(hand) {
   }
 
 
-  // ---------------------------------
-  // ROCK ✊
-  // ---------------------------------
+  // =====================================
+  // ROCK
+  // =====================================
 
   if (
     !indexExtended &&
@@ -345,34 +352,36 @@ function getGesture(hand) {
   }
 
 
-  // HAND IS BETWEEN GESTURES
   return "";
 }
 
 
 // -------------------------------------
-// SHOW CURRENT GESTURES
+// SHOW LIVE GESTURES
 // -------------------------------------
 
 function showGestures() {
 
-  let playerHands = getPlayerHands();
+  let playerHands =
+    getPlayerHands();
 
 
   let p1Gesture =
-    getGesture(playerHands.player1Hand);
+    getGesture(
+      playerHands.player1Hand
+    );
 
 
   let p2Gesture =
-    getGesture(playerHands.player2Hand);
+    getGesture(
+      playerHands.player2Hand
+    );
 
 
   // PLAYER 1 BOX
-
   fill(255, 240);
 
   stroke(0);
-
   strokeWeight(2);
 
   rect(
@@ -385,7 +394,6 @@ function showGestures() {
 
 
   // PLAYER 2 BOX
-
   rect(
     width - 190,
     height - 60,
@@ -396,11 +404,9 @@ function showGestures() {
 
 
   noStroke();
-
   fill(0);
 
   textAlign(CENTER, CENTER);
-
   textSize(17);
 
 
@@ -428,27 +434,26 @@ function drawStartButton() {
   fill(255, 240);
 
   stroke(0);
-
   strokeWeight(4);
 
   rectMode(CENTER);
 
+
   rect(
     width / 2,
     height / 2,
-    200,
+    220,
     80,
     15
   );
 
 
   noStroke();
-
   fill(0);
 
   textAlign(CENTER, CENTER);
-
   textSize(28);
+
 
   text(
     "START GAME",
@@ -461,12 +466,11 @@ function drawStartButton() {
 
 
   // SCORE
-
   fill(255);
 
   textSize(18);
-
   textAlign(CENTER);
+
 
   text(
     "Player 1: " +
@@ -485,13 +489,10 @@ function drawStartButton() {
 
 function mousePressed() {
 
-  if (gameState === "waiting") {
-
-    startRound();
-
-  }
-
-  else if (gameState === "result") {
+  if (
+    gameState === "waiting" ||
+    gameState === "result"
+  ) {
 
     startRound();
 
@@ -508,46 +509,68 @@ function startRound() {
   gameState = "countdown";
 
   player1Choice = "";
-
   player2Choice = "";
 
   roundWinner = "";
 
+  p1Samples = [];
+  p2Samples = [];
 
+
+  // ROCK
   countdownText = "ROCK";
 
+
+  // =====================================
+  // PAPER - 4.5 SECONDS
+  // =====================================
 
   setTimeout(function() {
 
     countdownText = "PAPER";
 
-  }, 700);
+  }, 4500);
 
+
+  // =====================================
+  // SCISSORS - 9 SECONDS
+  // =====================================
 
   setTimeout(function() {
 
     countdownText = "SCISSORS";
 
-  }, 1400);
+  }, 9000);
 
+
+  // =====================================
+  // SHOOT - 13.5 SECONDS
+  // =====================================
 
   setTimeout(function() {
 
     countdownText = "SHOOT!";
 
-  }, 2100);
+  }, 13500);
 
+
+  // =====================================
+  // START READING HANDS
+  //
+  // SHOOT stays up for 1 second first.
+  // Then we start sampling.
+  // =====================================
 
   setTimeout(function() {
 
-    detectRound();
+    startReadingHands();
 
-  }, 2700);
+  }, 14500);
 }
 
 
 // -------------------------------------
-// COUNTDOWN
+// COUNTDOWN DISPLAY
 // -------------------------------------
 
 function drawCountdown() {
@@ -555,7 +578,6 @@ function drawCountdown() {
   fill(255, 245);
 
   stroke(0);
-
   strokeWeight(5);
 
   rectMode(CENTER);
@@ -564,19 +586,33 @@ function drawCountdown() {
   rect(
     width / 2,
     height / 2,
-    300,
-    100,
+    380,
+    150,
     15
   );
 
 
   noStroke();
 
-  fill(0);
-
   textAlign(CENTER, CENTER);
 
-  textSize(45);
+
+  // SHOOT IS RED
+  if (countdownText === "SHOOT!") {
+
+    fill(255, 0, 0);
+
+    textSize(75);
+
+  }
+
+  else {
+
+    fill(0);
+
+    textSize(52);
+
+  }
 
 
   text(
@@ -591,22 +627,231 @@ function drawCountdown() {
 
 
 // -------------------------------------
-// CHECK WINNER
+// START READING HANDS
 // -------------------------------------
 
-function detectRound() {
+function startReadingHands() {
 
-  let playerHands = getPlayerHands();
+  gameState = "reading";
 
+  p1Samples = [];
+  p2Samples = [];
+
+
+  /*
+    Check the players' hands every
+    100 milliseconds.
+
+    Instead of relying on ONE frame,
+    we collect lots of readings.
+  */
+
+  sampleInterval =
+    setInterval(function() {
+
+      sampleHands();
+
+    }, 100);
+
+
+  /*
+    Give the camera FOUR FULL SECONDS
+    to identify both gestures.
+  */
+
+  setTimeout(function() {
+
+    clearInterval(sampleInterval);
+
+    finishReadingHands();
+
+  }, 4000);
+}
+
+
+// -------------------------------------
+// SAMPLE HANDS
+// -------------------------------------
+
+function sampleHands() {
+
+  let playerHands =
+    getPlayerHands();
+
+
+  let p1Gesture =
+    getGesture(
+      playerHands.player1Hand
+    );
+
+
+  let p2Gesture =
+    getGesture(
+      playerHands.player2Hand
+    );
+
+
+  // Only save valid gestures
+
+  if (p1Gesture !== "") {
+
+    p1Samples.push(p1Gesture);
+
+  }
+
+
+  if (p2Gesture !== "") {
+
+    p2Samples.push(p2Gesture);
+
+  }
+}
+
+
+// -------------------------------------
+// READING SCREEN
+// -------------------------------------
+
+function drawReading() {
+
+  fill(255, 245);
+
+  stroke(0);
+  strokeWeight(5);
+
+  rectMode(CENTER);
+
+
+  rect(
+    width / 2,
+    height / 2,
+    390,
+    150,
+    15
+  );
+
+
+  noStroke();
+
+  fill(255, 0, 0);
+
+  textAlign(CENTER, CENTER);
+
+  textSize(42);
+
+
+  text(
+    "HOLD!",
+    width / 2,
+    height / 2 - 20
+  );
+
+
+  fill(0);
+
+  textSize(18);
+
+
+  text(
+    "Reading your hands...",
+    width / 2,
+    height / 2 + 30
+  );
+
+
+  rectMode(CORNER);
+}
+
+
+// -------------------------------------
+// FIND MOST COMMON GESTURE
+// -------------------------------------
+
+function mostCommonGesture(samples) {
+
+  if (samples.length === 0) {
+
+    return "";
+
+  }
+
+
+  let rockCount = 0;
+  let paperCount = 0;
+  let scissorsCount = 0;
+
+
+  for (let gesture of samples) {
+
+    if (gesture === "Rock") {
+
+      rockCount++;
+
+    }
+
+
+    if (gesture === "Paper") {
+
+      paperCount++;
+
+    }
+
+
+    if (gesture === "Scissors") {
+
+      scissorsCount++;
+
+    }
+  }
+
+
+  if (
+    rockCount >= paperCount &&
+    rockCount >= scissorsCount
+  ) {
+
+    return "Rock";
+
+  }
+
+
+  if (
+    paperCount >= rockCount &&
+    paperCount >= scissorsCount
+  ) {
+
+    return "Paper";
+
+  }
+
+
+  return "Scissors";
+}
+
+
+// -------------------------------------
+// FINISH READING HANDS
+// -------------------------------------
+
+function finishReadingHands() {
 
   player1Choice =
-    getGesture(playerHands.player1Hand);
+    mostCommonGesture(p1Samples);
 
 
   player2Choice =
-    getGesture(playerHands.player2Hand);
+    mostCommonGesture(p2Samples);
 
 
+  determineWinner();
+}
+
+
+// -------------------------------------
+// DETERMINE WINNER
+// -------------------------------------
+
+function determineWinner() {
 
   // COULD NOT READ HANDS
 
@@ -624,7 +869,6 @@ function detectRound() {
   }
 
 
-
   // TIE
 
   if (
@@ -634,7 +878,6 @@ function detectRound() {
     roundWinner = "TIE!";
 
   }
-
 
 
   // PLAYER 1 WINS
@@ -670,7 +913,6 @@ function detectRound() {
   }
 
 
-
   // PLAYER 2 WINS
 
   else {
@@ -696,7 +938,6 @@ function drawResult() {
   fill(255, 245);
 
   stroke(0);
-
   strokeWeight(5);
 
   rectMode(CENTER);
@@ -712,15 +953,14 @@ function drawResult() {
 
 
   noStroke();
-
   fill(0);
 
   textAlign(CENTER, CENTER);
 
 
   // WINNER
-
   textSize(32);
+
 
   text(
     roundWinner,
@@ -729,9 +969,9 @@ function drawResult() {
   );
 
 
-  // CHOICES
-
+  // PLAYER CHOICES
   textSize(20);
+
 
   text(
     "P1: " +
@@ -744,8 +984,8 @@ function drawResult() {
 
 
   // SCORE
-
   textSize(26);
+
 
   text(
     player1Score +
@@ -757,8 +997,8 @@ function drawResult() {
 
 
   // NEXT ROUND
-
   textSize(14);
+
 
   text(
     "Click anywhere for next round",

@@ -1,51 +1,97 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="style.css">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <link
+    rel="stylesheet"
+    type="text/css"
+    href="style.css"
+  >
+
   <script src="https://cdn.jsdelivr.net/npm/p5@2.3.3/lib/p5.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/p5.sound@0.4.1/dist/p5.sound.min.js"></script>
+
   <script src="https://unpkg.com/ml5@1/dist/ml5.min.js"></script>
+
   <title>Rock Paper Scissors</title>
+
 </head>
+
 <body>
-  <div class="game-shell">
-    <header>
-      <h1>Rock, Paper, Scissors</h1>
-      <p>Show your hands to the camera and let the game decide the winner.</p>
-    </header>
 
-    <section id="setupPanel" class="panel setup-panel">
-      <div class="setup-row">
-        <label>What's on the line?</label>
-        <input id="stakes" type="text" placeholder="Nothing, just for fun!">
+  <!-- GAME INFORMATION -->
+  <div id="gameInfo">
+
+    <h1>Rock, Paper, Scissors</h1>
+
+    <div class="playerInputs">
+
+      <div class="inputBox">
+
+        <label for="player1Name">
+          Player 1 Name
+        </label>
+
+        <input
+          type="text"
+          id="player1Name"
+          placeholder="Player 1"
+        >
+
       </div>
-      <div class="setup-row compact">
-        <label>First to:</label>
-        <select id="winTarget">
-          <option value="1">1 win</option>
-          <option value="2" selected>2 wins (best of 3)</option>
-          <option value="3">3 wins (best of 5)</option>
-        </select>
+
+
+      <div class="inputBox">
+
+        <label for="player2Name">
+          Player 2 Name
+        </label>
+
+        <input
+          type="text"
+          id="player2Name"
+          placeholder="Player 2"
+        >
+
       </div>
-      <button id="startButton">START GAME</button>
-    </section>
 
-    <section class="scorebar">
-      <div><strong>PLAYER 1</strong><span id="score1">0</span></div>
-      <div id="roundLabel">READY?</div>
-      <div><strong>PLAYER 2</strong><span id="score2">0</span></div>
-    </section>
+    </div>
 
-    <main id="canvasHolder"></main>
 
-    <section class="legend">
-      <span>✊ Rock</span><span>✋ Paper</span><span>✌️ Scissors</span>
-    </section>
+    <div class="betBox">
 
-    <p id="status">Allow camera access, then put one hand on each side of the screen.</p>
-    <button id="playAgain" class="hidden">PLAY AGAIN</button>
+      <label for="betInput">
+        What's on the line?
+      </label>
+
+      <input
+        type="text"
+        id="betInput"
+        placeholder="Loser buys dinner..."
+      >
+
+      <p>Or nothing, just for fun!</p>
+
+    </div>
+
   </div>
+
+
+  <!-- P5 CANVAS -->
+  <main></main>
+
+
   <script src="sketch.js"></script>
+
 </body>
+
 </html>

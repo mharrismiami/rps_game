@@ -1,17 +1,25 @@
-let video;
+console.log("NEW RPS VERSION LOADED");
 
-let faceMesh;
-let faceOptions = {
-  maxFaces: 1,
-  refineLandmarks: false,
-  flipped: false
-};
-let faces = [];
+let video;
 
 let handPose;
 let hands = [];
 
+
+// -------------------------------------
+// PLAYER INFORMATION
+// -------------------------------------
+
+let player1Name = "PLAYER 1";
+let player2Name = "PLAYER 2";
+
+let bet = "Just for fun!";
+
+
+// -------------------------------------
 // GAME VARIABLES
+// -------------------------------------
+
 let gameState = "waiting";
 
 let countdownText = "";
@@ -26,12 +34,23 @@ let roundWinner = "";
 
 
 // -------------------------------------
+// HAND READING
+// -------------------------------------
+
+let p1Samples = [];
+let p2Samples = [];
+
+let sampleInterval;
+
+
+// -------------------------------------
 // SETUP
 // -------------------------------------
 
 async function setup() {
 
   createCanvas(640, 480);
+
 
   // CAMERA
   video = createCapture(VIDEO);
@@ -41,26 +60,82 @@ async function setup() {
   video.hide();
 
 
-  // FACE TRACKING
-  faceMesh = await ml5.faceMesh(faceOptions);
-
-  faceMesh.detectStart(
-    video,
-    (results) => {
-      faces = results;
-    }
-  );
-
-
   // HAND TRACKING
   handPose = await ml5.handPose();
 
+
   handPose.detectStart(
     video,
-    (results) => {
+    function(results) {
+
       hands = results;
+
     }
   );
+}
+
+
+// -------------------------------------
+// UPDATE PLAYER INFORMATION
+// -------------------------------------
+
+function updatePlayerInfo() {
+
+  let p1Input =
+    document.getElementById("player1Name").value.trim();
+
+
+  let p2Input =
+    document.getElementById("player2Name").value.trim();
+
+
+  let betInput =
+    document.getElementById("betInput").value.trim();
+
+
+  if (p1Input !== "") {
+
+    player1Name =
+      p1Input.toUpperCase();
+
+  }
+
+  else {
+
+    player1Name =
+      "PLAYER 1";
+
+  }
+
+
+  if (p2Input !== "") {
+
+    player2Name =
+      p2Input.toUpperCase();
+
+  }
+
+  else {
+
+    player2Name =
+      "PLAYER 2";
+
+  }
+
+
+  if (betInput !== "") {
+
+    bet =
+      betInput;
+
+  }
+
+  else {
+
+    bet =
+      "Just for fun!";
+
+  }
 }
 
 
@@ -72,13 +147,36 @@ function draw() {
 
   background(220);
 
-  // CAMERA
-  image(video, 0, 0);
+
+  // =====================================
+  // MIRRORED CAMERA
+  // =====================================
+
+  push();
+
+  translate(width, 0);
+
+  scale(-1, 1);
+
+  image(
+    video,
+    0,
+    0,
+    width,
+    height
+  );
+
+  pop();
 
 
+  // =====================================
   // CENTER LINE
+  // =====================================
+
   stroke(255);
+
   strokeWeight(3);
+
 
   line(
     width / 2,
@@ -88,7 +186,10 @@ function draw() {
   );
 
 
+  // =====================================
   // PLAYER LABELS
+  // =====================================
+
   noStroke();
 
   fill(255);
@@ -97,14 +198,16 @@ function draw() {
 
   textSize(20);
 
+
   text(
-    "PLAYER 1",
+    player1Name,
     width / 4,
     30
   );
 
+
   text(
-    "PLAYER 2",
+    player2Name,
     width * 0.75,
     30
   );
@@ -114,11 +217,11 @@ function draw() {
   drawHands();
 
 
-  // SHOW LIVE GESTURES
+  // SHOW CURRENT GESTURES
   showGestures();
 
 
-  // WAITING SCREEN
+  // START SCREEN
   if (gameState === "waiting") {
 
     drawStartButton();
@@ -134,7 +237,15 @@ function draw() {
   }
 
 
-  // RESULT
+  // READING HANDS
+  if (gameState === "reading") {
+
+    drawReading();
+
+  }
+
+
+  // RESULTS
   if (gameState === "result") {
 
     drawResult();
@@ -144,34 +255,40 @@ function draw() {
 
 
 // -------------------------------------
-// DRAW HAND TRACKING
+// DRAW HAND POINTS
 // -------------------------------------
 
 function drawHands() {
 
-  if (hands.length > 0) {
+  for (let hand of hands) {
 
-    for (let hand of hands) {
+    for (let keypoint of hand.keypoints) {
 
-      for (let keypoint of hand.keypoints) {
 
-        fill(255, 0, 0);
+      // Mirror the tracking coordinates
+      // to match the mirrored camera
 
-        noStroke();
+      let invertedX =
+        width - keypoint.x;
 
-        circle(
-          keypoint.x,
-          keypoint.y,
-          8
-        );
-      }
+
+      fill(255, 0, 0);
+
+      noStroke();
+
+
+      circle(
+        invertedX,
+        keypoint.y,
+        8
+      );
     }
   }
 }
 
 
 // -------------------------------------
-// FIND PLAYER 1 AND PLAYER 2 HAND
+// FIND PLAYER HANDS
 // -------------------------------------
 
 function getPlayerHands() {
@@ -183,18 +300,27 @@ function getPlayerHands() {
 
   for (let hand of hands) {
 
-    // Wrist
-    let wrist = hand.keypoints[0];
+    let wrist =
+      hand.keypoints[0];
 
 
-    // LEFT SIDE OF CAMERA
-    if (wrist.x < width / 2) {
+    // Mirror hand position
+
+    let invertedX =
+      width - wrist.x;
+
+
+    // LEFT SIDE = PLAYER 1
+
+    if (invertedX < width / 2) {
 
       player1Hand = hand;
 
     }
 
-    // RIGHT SIDE OF CAMERA
+
+    // RIGHT SIDE = PLAYER 2
+
     else {
 
       player2Hand = hand;
@@ -204,23 +330,29 @@ function getPlayerHands() {
 
 
   return {
-    player1Hand,
-    player2Hand
+
+    player1Hand: player1Hand,
+
+    player2Hand: player2Hand
+
   };
 }
 
 
 // -------------------------------------
-// DISTANCE BETWEEN TWO POINTS
+// DISTANCE FUNCTION
 // -------------------------------------
 
 function pointDistance(point1, point2) {
 
   return dist(
+
     point1.x,
     point1.y,
+
     point2.x,
     point2.y
+
   );
 }
 
@@ -238,68 +370,114 @@ function getGesture(hand) {
   }
 
 
-  let p = hand.keypoints;
+  let p =
+    hand.keypoints;
 
 
-  // WRIST
-  let wrist = p[0];
+  let wrist =
+    p[0];
 
 
-  // BASE OF EACH FINGER
+  // FINGER BASES
 
-  let indexBase = p[5];
+  let indexBase =
+    p[5];
 
-  let middleBase = p[9];
+  let middleBase =
+    p[9];
 
-  let ringBase = p[13];
+  let ringBase =
+    p[13];
 
-  let pinkyBase = p[17];
+  let pinkyBase =
+    p[17];
 
 
   // FINGER TIPS
 
-  let indexTip = p[8];
+  let indexTip =
+    p[8];
 
-  let middleTip = p[12];
+  let middleTip =
+    p[12];
 
-  let ringTip = p[16];
+  let ringTip =
+    p[16];
 
-  let pinkyTip = p[20];
+  let pinkyTip =
+    p[20];
 
 
-  /*
-    Compare each fingertip's distance from the wrist
-    to the finger base's distance from the wrist.
-
-    This works better than just checking Y position
-    because the hand can be tilted.
-  */
-
+  // =====================================
+  // CHECK FINGERS
+  // =====================================
 
   let indexExtended =
-    pointDistance(indexTip, wrist) >
-    pointDistance(indexBase, wrist) * 1.35;
+
+    pointDistance(
+      indexTip,
+      wrist
+    )
+
+    >
+
+    pointDistance(
+      indexBase,
+      wrist
+    ) * 1.35;
+
 
 
   let middleExtended =
-    pointDistance(middleTip, wrist) >
-    pointDistance(middleBase, wrist) * 1.35;
+
+    pointDistance(
+      middleTip,
+      wrist
+    )
+
+    >
+
+    pointDistance(
+      middleBase,
+      wrist
+    ) * 1.35;
+
 
 
   let ringExtended =
-    pointDistance(ringTip, wrist) >
-    pointDistance(ringBase, wrist) * 1.35;
+
+    pointDistance(
+      ringTip,
+      wrist
+    )
+
+    >
+
+    pointDistance(
+      ringBase,
+      wrist
+    ) * 1.35;
+
 
 
   let pinkyExtended =
-    pointDistance(pinkyTip, wrist) >
-    pointDistance(pinkyBase, wrist) * 1.30;
+
+    pointDistance(
+      pinkyTip,
+      wrist
+    )
+
+    >
+
+    pointDistance(
+      pinkyBase,
+      wrist
+    ) * 1.30;
 
 
-
-  // ---------------------------------
-  // SCISSORS ✌
-  // ---------------------------------
+  // =====================================
+  // SCISSORS
+  // =====================================
 
   if (
     indexExtended &&
@@ -313,9 +491,9 @@ function getGesture(hand) {
   }
 
 
-  // ---------------------------------
-  // PAPER ✋
-  // ---------------------------------
+  // =====================================
+  // PAPER
+  // =====================================
 
   if (
     indexExtended &&
@@ -329,9 +507,9 @@ function getGesture(hand) {
   }
 
 
-  // ---------------------------------
-  // ROCK ✊
-  // ---------------------------------
+  // =====================================
+  // ROCK
+  // =====================================
 
   if (
     !indexExtended &&
@@ -345,26 +523,30 @@ function getGesture(hand) {
   }
 
 
-  // HAND IS BETWEEN GESTURES
   return "";
 }
 
 
 // -------------------------------------
-// SHOW CURRENT GESTURES
+// SHOW LIVE GESTURES
 // -------------------------------------
 
 function showGestures() {
 
-  let playerHands = getPlayerHands();
+  let playerHands =
+    getPlayerHands();
 
 
   let p1Gesture =
-    getGesture(playerHands.player1Hand);
+    getGesture(
+      playerHands.player1Hand
+    );
 
 
   let p2Gesture =
-    getGesture(playerHands.player2Hand);
+    getGesture(
+      playerHands.player2Hand
+    );
 
 
   // PLAYER 1 BOX
@@ -374,6 +556,7 @@ function showGestures() {
   stroke(0);
 
   strokeWeight(2);
+
 
   rect(
     20,
@@ -433,10 +616,11 @@ function drawStartButton() {
 
   rectMode(CENTER);
 
+
   rect(
     width / 2,
     height / 2,
-    200,
+    220,
     80,
     15
   );
@@ -449,6 +633,7 @@ function drawStartButton() {
   textAlign(CENTER, CENTER);
 
   textSize(28);
+
 
   text(
     "START GAME",
@@ -468,30 +653,45 @@ function drawStartButton() {
 
   textAlign(CENTER);
 
+
   text(
-    "Player 1: " +
+    player1Name +
+    ": " +
     player1Score +
-    "     Player 2: " +
+    "     " +
+    player2Name +
+    ": " +
     player2Score,
     width / 2,
     65
+  );
+
+
+  // WHAT'S ON THE LINE
+
+  textSize(15);
+
+
+  text(
+    "On the line: " + bet,
+    width / 2,
+    90
   );
 }
 
 
 // -------------------------------------
-// CLICK
+// MOUSE CLICK
 // -------------------------------------
 
 function mousePressed() {
 
-  if (gameState === "waiting") {
+  if (
+    gameState === "waiting" ||
+    gameState === "result"
+  ) {
 
-    startRound();
-
-  }
-
-  else if (gameState === "result") {
+    updatePlayerInfo();
 
     startRound();
 
@@ -505,7 +705,12 @@ function mousePressed() {
 
 function startRound() {
 
-  gameState = "countdown";
+  console.log("NEW COUNTDOWN STARTED");
+
+
+  gameState =
+    "countdown";
+
 
   player1Choice = "";
 
@@ -514,40 +719,69 @@ function startRound() {
   roundWinner = "";
 
 
-  countdownText = "ROCK";
+  p1Samples = [];
+
+  p2Samples = [];
 
 
-  setTimeout(function() {
+  // =====================================
+  // ROCK
+  // =====================================
 
-    countdownText = "PAPER";
-
-  }, 700);
-
-
-  setTimeout(function() {
-
-    countdownText = "SCISSORS";
-
-  }, 1400);
+  countdownText =
+    "ROCK";
 
 
-  setTimeout(function() {
-
-    countdownText = "SHOOT!";
-
-  }, 2100);
-
+  // =====================================
+  // PAPER AFTER 1.25 SECONDS
+  // =====================================
 
   setTimeout(function() {
 
-    detectRound();
+    countdownText =
+      "PAPER";
 
-  }, 2700);
+  }, 1250);
+
+
+  // =====================================
+  // SCISSORS AFTER 2.5 SECONDS
+  // =====================================
+
+  setTimeout(function() {
+
+    countdownText =
+      "SCISSORS";
+
+  }, 2500);
+
+
+  // =====================================
+  // SHOOT AFTER 3.75 SECONDS
+  // =====================================
+
+  setTimeout(function() {
+
+    countdownText =
+      "SHOOT!";
+
+  }, 3750);
+
+
+  // =====================================
+  // START READING AT 4.4 SECONDS
+  // =====================================
+
+  setTimeout(function() {
+
+    startReadingHands();
+
+  }, 4400);
 }
 
 
 // -------------------------------------
-// COUNTDOWN
+// COUNTDOWN DISPLAY
 // -------------------------------------
 
 function drawCountdown() {
@@ -564,19 +798,44 @@ function drawCountdown() {
   rect(
     width / 2,
     height / 2,
-    300,
-    100,
+    380,
+    150,
     15
   );
 
 
   noStroke();
 
-  fill(0);
-
   textAlign(CENTER, CENTER);
 
-  textSize(45);
+
+  // SHOOT = RED
+
+  if (
+    countdownText === "SHOOT!"
+  ) {
+
+    fill(
+      255,
+      0,
+      0
+    );
+
+
+    textSize(72);
+
+  }
+
+
+  // OTHER WORDS = BLACK
+
+  else {
+
+    fill(0);
+
+    textSize(52);
+
+  }
 
 
   text(
@@ -591,24 +850,296 @@ function drawCountdown() {
 
 
 // -------------------------------------
-// CHECK WINNER
+// START READING HANDS
 // -------------------------------------
 
-function detectRound() {
+function startReadingHands() {
 
-  let playerHands = getPlayerHands();
+  console.log("READING HANDS");
 
+
+  gameState =
+    "reading";
+
+
+  p1Samples = [];
+
+  p2Samples = [];
+
+
+  // READ HANDS EVERY 100 MILLISECONDS
+
+  sampleInterval =
+    setInterval(function() {
+
+      sampleHands();
+
+    }, 100);
+
+
+  // =====================================
+  // READ FOR 1.75 SECONDS
+  // =====================================
+
+  setTimeout(function() {
+
+    clearInterval(
+      sampleInterval
+    );
+
+
+    finishReadingHands();
+
+  }, 1750);
+}
+
+
+// -------------------------------------
+// SAMPLE HANDS
+// -------------------------------------
+
+function sampleHands() {
+
+  let playerHands =
+    getPlayerHands();
+
+
+  let p1Gesture =
+    getGesture(
+      playerHands.player1Hand
+    );
+
+
+  let p2Gesture =
+    getGesture(
+      playerHands.player2Hand
+    );
+
+
+  // SAVE PLAYER 1 GESTURE
+
+  if (
+    p1Gesture !== ""
+  ) {
+
+    p1Samples.push(
+      p1Gesture
+    );
+
+  }
+
+
+  // SAVE PLAYER 2 GESTURE
+
+  if (
+    p2Gesture !== ""
+  ) {
+
+    p2Samples.push(
+      p2Gesture
+    );
+
+  }
+}
+
+
+// -------------------------------------
+// READING HANDS SCREEN
+// -------------------------------------
+
+function drawReading() {
+
+  fill(255, 245);
+
+  stroke(0);
+
+  strokeWeight(5);
+
+  rectMode(CENTER);
+
+
+  rect(
+    width / 2,
+    height / 2,
+    400,
+    160,
+    15
+  );
+
+
+  noStroke();
+
+
+  // HOLD
+
+  fill(
+    255,
+    0,
+    0
+  );
+
+
+  textAlign(
+    CENTER,
+    CENTER
+  );
+
+
+  textSize(48);
+
+
+  text(
+    "HOLD!",
+    width / 2,
+    height / 2 - 25
+  );
+
+
+  // READING MESSAGE
+
+  fill(0);
+
+  textSize(18);
+
+
+  text(
+    "Reading both hands...",
+    width / 2,
+    height / 2 + 30
+  );
+
+
+  rectMode(CORNER);
+}
+
+
+// -------------------------------------
+// FIND MOST COMMON GESTURE
+// -------------------------------------
+
+function mostCommonGesture(samples) {
+
+  if (
+    samples.length === 0
+  ) {
+
+    return "";
+
+  }
+
+
+  let rockCount = 0;
+
+  let paperCount = 0;
+
+  let scissorsCount = 0;
+
+
+  for (
+    let gesture of samples
+  ) {
+
+
+    if (
+      gesture === "Rock"
+    ) {
+
+      rockCount++;
+
+    }
+
+
+    if (
+      gesture === "Paper"
+    ) {
+
+      paperCount++;
+
+    }
+
+
+    if (
+      gesture === "Scissors"
+    ) {
+
+      scissorsCount++;
+
+    }
+  }
+
+
+  // ROCK
+
+  if (
+    rockCount >= paperCount &&
+    rockCount >= scissorsCount
+  ) {
+
+    return "Rock";
+
+  }
+
+
+  // PAPER
+
+  if (
+    paperCount >= rockCount &&
+    paperCount >= scissorsCount
+  ) {
+
+    return "Paper";
+
+  }
+
+
+  // SCISSORS
+
+  return "Scissors";
+}
+
+
+// -------------------------------------
+// FINISH READING
+// -------------------------------------
+
+function finishReadingHands() {
 
   player1Choice =
-    getGesture(playerHands.player1Hand);
+    mostCommonGesture(
+      p1Samples
+    );
 
 
   player2Choice =
-    getGesture(playerHands.player2Hand);
+    mostCommonGesture(
+      p2Samples
+    );
 
 
+  console.log(
+    "Player 1:",
+    player1Choice
+  );
 
-  // COULD NOT READ HANDS
+
+  console.log(
+    "Player 2:",
+    player2Choice
+  );
+
+
+  determineWinner();
+}
+
+
+// -------------------------------------
+// DETERMINE WINNER
+// -------------------------------------
+
+function determineWinner() {
+
+
+  // COULD NOT READ BOTH HANDS
 
   if (
     player1Choice === "" ||
@@ -618,23 +1149,26 @@ function detectRound() {
     roundWinner =
       "Couldn't read both hands";
 
-    gameState = "result";
+
+    gameState =
+      "result";
+
 
     return;
   }
 
 
-
   // TIE
 
   if (
-    player1Choice === player2Choice
+    player1Choice ===
+    player2Choice
   ) {
 
-    roundWinner = "TIE!";
+    roundWinner =
+      "TIE!";
 
   }
-
 
 
   // PLAYER 1 WINS
@@ -663,12 +1197,12 @@ function detectRound() {
   ) {
 
     roundWinner =
-      "PLAYER 1 WINS!";
+      player1Name + " WINS!";
+
 
     player1Score++;
 
   }
-
 
 
   // PLAYER 2 WINS
@@ -676,14 +1210,16 @@ function detectRound() {
   else {
 
     roundWinner =
-      "PLAYER 2 WINS!";
+      player2Name + " WINS!";
+
 
     player2Score++;
 
   }
 
 
-  gameState = "result";
+  gameState =
+    "result";
 }
 
 
@@ -705,8 +1241,8 @@ function drawResult() {
   rect(
     width / 2,
     height / 2,
-    430,
-    200,
+    460,
+    240,
     15
   );
 
@@ -715,55 +1251,77 @@ function drawResult() {
 
   fill(0);
 
-  textAlign(CENTER, CENTER);
+  textAlign(
+    CENTER,
+    CENTER
+  );
 
 
   // WINNER
 
   textSize(32);
 
+
   text(
     roundWinner,
     width / 2,
-    height / 2 - 55
+    height / 2 - 75
   );
 
 
-  // CHOICES
+  // PLAYER CHOICES
 
-  textSize(20);
+  textSize(18);
+
 
   text(
-    "P1: " +
+    player1Name +
+    ": " +
     player1Choice +
-    "     |     P2: " +
+    "   |   " +
+    player2Name +
+    ": " +
     player2Choice,
     width / 2,
-    height / 2
+    height / 2 - 25
   );
 
 
   // SCORE
 
-  textSize(26);
+  textSize(28);
+
 
   text(
     player1Score +
     "  -  " +
     player2Score,
     width / 2,
-    height / 2 + 45
+    height / 2 + 20
+  );
+
+
+  // BET
+
+  textSize(15);
+
+
+  text(
+    "On the line: " + bet,
+    width / 2,
+    height / 2 + 58
   );
 
 
   // NEXT ROUND
 
-  textSize(14);
+  textSize(13);
+
 
   text(
     "Click anywhere for next round",
     width / 2,
-    height / 2 + 78
+    height / 2 + 90
   );
 
 

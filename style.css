@@ -1,27 +1,138 @@
-* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: #719eae; font-family: Arial, Helvetica, sans-serif; color: #111; }
-body { min-height: 100vh; padding: 28px 16px; }
-.game-shell { width: min(920px, 100%); margin: 0 auto; text-align: center; }
-header h1 { margin: 0; font-family: Georgia, serif; font-size: clamp(32px, 5vw, 54px); }
-header p { margin: 8px 0 22px; }
-.panel { background: rgba(255,255,255,.94); border: 3px solid #111; padding: 14px; box-shadow: 7px 7px 0 rgba(0,0,0,.18); }
-.setup-panel { display: flex; align-items: end; justify-content: center; gap: 14px; flex-wrap: wrap; }
-.setup-row { display: flex; flex-direction: column; text-align: left; gap: 5px; }
-.setup-row.compact { min-width: 150px; }
-label { font-weight: 700; font-size: 14px; }
-input, select, button { border: 2px solid #111; padding: 10px 12px; background: white; font: inherit; }
-input { width: min(330px, 70vw); }
-button { font-weight: 900; cursor: pointer; background: #fff; }
-button:hover { transform: translateY(-2px); }
-.scorebar { margin-top: 22px; background: #fff; border: 3px solid #111; display: grid; grid-template-columns: 1fr 1.2fr 1fr; align-items: center; min-height: 72px; }
-.scorebar > div { padding: 10px; display: flex; gap: 10px; justify-content: center; align-items: center; }
-.scorebar > div + div { border-left: 2px solid #111; }
-.scorebar span { display: inline-grid; place-items: center; width: 34px; height: 34px; border: 2px solid #111; border-radius: 50%; font-weight: 900; }
-#roundLabel { font-size: 22px; font-weight: 900; }
-#canvasHolder { border: 3px solid #111; border-top: 0; background: #111; line-height: 0; }
-canvas { display: block; width: 100% !important; height: auto !important; }
-.legend { background: #fff; border: 3px solid #111; border-top: 0; display: flex; justify-content: center; gap: 35px; padding: 12px; font-weight: 700; }
-#status { font-weight: 700; min-height: 24px; }
-#playAgain { margin-top: 5px; }
-.hidden { display: none; }
-@media (max-width: 620px) { .scorebar { grid-template-columns: 1fr; } .scorebar > div + div { border-left: 0; border-top: 2px solid #111; } .legend { gap: 10px; font-size: 13px; } }
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #71a1b2;
+  font-family: Arial, sans-serif;
+}
+
+
+body {
+  min-height: 100vh;
+}
+
+
+/* ------------------------------
+   GAME INFORMATION
+------------------------------ */
+
+#gameInfo {
+
+  width: 640px;
+
+  margin: 20px auto 0 auto;
+
+  background: white;
+
+  border-radius: 12px;
+
+  padding: 20px;
+
+  box-sizing: border-box;
+
+}
+
+
+#gameInfo h1 {
+
+  text-align: center;
+
+  margin-top: 0;
+
+  margin-bottom: 20px;
+
+}
+
+
+.playerInputs {
+
+  display: flex;
+
+  gap: 20px;
+
+}
+
+
+.inputBox {
+
+  flex: 1;
+
+}
+
+
+.inputBox label,
+.betBox label {
+
+  display: block;
+
+  font-weight: bold;
+
+  margin-bottom: 6px;
+
+}
+
+
+.inputBox input,
+.betBox input {
+
+  width: 100%;
+
+  padding: 10px;
+
+  font-size: 16px;
+
+  box-sizing: border-box;
+
+  border: 2px solid #aaa;
+
+  border-radius: 6px;
+
+}
+
+
+.betBox {
+
+  margin-top: 18px;
+
+}
+
+
+.betBox p {
+
+  text-align: center;
+
+  font-size: 13px;
+
+  color: #666;
+
+  margin-bottom: 0;
+
+}
+
+
+/* ------------------------------
+   CANVAS
+------------------------------ */
+
+main {
+
+  display: flex;
+
+  justify-content: center;
+
+  padding-top: 20px;
+
+  padding-bottom: 30px;
+
+}
+
+
+canvas {
+
+  display: block;
+
+  border: 4px solid white;
+
+  border-radius: 10px;
+
+}

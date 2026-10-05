@@ -1,9 +1,20 @@
-console.log("NEW RPS VERSION LOADED");
+console.log("SNAPSHOT RPS VERSION LOADED");
 
 let video;
 
 let handPose;
-let hands = [];
+let modelReady = false;
+
+
+// -------------------------------------
+// SNAPSHOT VARIABLES
+// -------------------------------------
+
+let snapCanvas = null;
+
+let snapHands = [];
+
+let flashStart = -10000;
 
 
 // -------------------------------------
@@ -34,16 +45,6 @@ let roundWinner = "";
 
 
 // -------------------------------------
-// HAND READING
-// -------------------------------------
-
-let p1Samples = [];
-let p2Samples = [];
-
-let sampleInterval;
-
-
-// -------------------------------------
 // SETUP
 // -------------------------------------
 
@@ -53,6 +54,7 @@ async function setup() {
 
 
   // CAMERA
+
   video = createCapture(VIDEO);
 
   video.size(640, 480);
@@ -60,18 +62,20 @@ async function setup() {
   video.hide();
 
 
-  // HAND TRACKING
-  handPose = await ml5.handPose();
+  // HANDPOSE MODEL
+  // IMPORTANT:
+  // We are NOT using detectStart.
+  // Detection only happens on the snapshot.
+
+  handPose = await ml5.handPose({
+    maxHands: 2
+  });
 
 
-  handPose.detectStart(
-    video,
-    function(results) {
+  modelReady = true;
 
-      hands = results;
 
-    }
-  );
+  console.log("HANDPOSE READY");
 }
 
 
@@ -149,7 +153,7 @@ function draw() {
 
 
   // =====================================
-  // MIRRORED CAMERA
+  // CAMERA / FROZEN SNAPSHOT
   // =====================================
 
   push();
@@ -158,13 +162,42 @@ function draw() {
 
   scale(-1, 1);
 
-  image(
-    video,
-    0,
-    0,
-    width,
-    height
-  );
+
+  // SHOW FROZEN PHOTO AFTER SHOOT
+
+  if (
+    (
+      gameState === "processing" ||
+      gameState === "result"
+    ) &&
+    snapCanvas
+  ) {
+
+    drawingContext.drawImage(
+      snapCanvas,
+      0,
+      0,
+      width,
+      height
+    );
+
+  }
+
+
+  // OTHERWISE SHOW LIVE CAMERA
+
+  else {
+
+    image(
+      video,
+      0,
+      0,
+      width,
+      height
+    );
+
+  }
+
 
   pop();
 
@@ -213,15 +246,21 @@ function draw() {
   );
 
 
-  // DRAW HAND POINTS
-  drawHands();
+  // =====================================
+  // SNAPSHOT HAND POINTS
+  // =====================================
+
+  if (gameState === "result") {
+
+    drawSnapshotHands();
+
+  }
 
 
-  // SHOW CURRENT GESTURES
-  showGestures();
+  // =====================================
+  // GAME SCREENS
+  // =====================================
 
-
-  // START SCREEN
   if (gameState === "waiting") {
 
     drawStartButton();
@@ -229,7 +268,6 @@ function draw() {
   }
 
 
-  // COUNTDOWN
   if (gameState === "countdown") {
 
     drawCountdown();
@@ -237,105 +275,71 @@ function draw() {
   }
 
 
-  // READING HANDS
-  if (gameState === "reading") {
+  if (gameState === "processing") {
 
-    drawReading();
+    drawProcessing();
 
   }
 
 
-  // RESULTS
   if (gameState === "result") {
 
     drawResult();
 
   }
+
+
+  // CAMERA FLASH
+
+  drawFlash();
 }
 
 
 // -------------------------------------
-// DRAW HAND POINTS
+// FIND PLAYER HAND
 // -------------------------------------
 
-function drawHands() {
+function handForPlayer(list, player) {
 
-  for (let hand of hands) {
-
-    for (let keypoint of hand.keypoints) {
-
-
-      // Mirror the tracking coordinates
-      // to match the mirrored camera
-
-      let invertedX =
-        width - keypoint.x;
-
-
-      fill(255, 0, 0);
-
-      noStroke();
-
-
-      circle(
-        invertedX,
-        keypoint.y,
-        8
-      );
-    }
-  }
-}
-
-
-// -------------------------------------
-// FIND PLAYER HANDS
-// -------------------------------------
-
-function getPlayerHands() {
-
-  let player1Hand = null;
-
-  let player2Hand = null;
-
-
-  for (let hand of hands) {
+  for (let hand of list) {
 
     let wrist =
       hand.keypoints[0];
 
 
-    // Mirror hand position
+    // Mirror the X coordinate because
+    // the camera is displayed mirrored
 
     let invertedX =
       width - wrist.x;
 
 
-    // LEFT SIDE = PLAYER 1
+    // PLAYER 1 = LEFT
 
-    if (invertedX < width / 2) {
+    if (
+      player === 0 &&
+      invertedX < width / 2
+    ) {
 
-      player1Hand = hand;
+      return hand;
 
     }
 
 
-    // RIGHT SIDE = PLAYER 2
+    // PLAYER 2 = RIGHT
 
-    else {
+    if (
+      player === 1 &&
+      invertedX >= width / 2
+    ) {
 
-      player2Hand = hand;
+      return hand;
 
     }
   }
 
 
-  return {
-
-    player1Hand: player1Hand,
-
-    player2Hand: player2Hand
-
-  };
+  return null;
 }
 
 
@@ -528,81 +532,6 @@ function getGesture(hand) {
 
 
 // -------------------------------------
-// SHOW LIVE GESTURES
-// -------------------------------------
-
-function showGestures() {
-
-  let playerHands =
-    getPlayerHands();
-
-
-  let p1Gesture =
-    getGesture(
-      playerHands.player1Hand
-    );
-
-
-  let p2Gesture =
-    getGesture(
-      playerHands.player2Hand
-    );
-
-
-  // PLAYER 1 BOX
-
-  fill(255, 240);
-
-  stroke(0);
-
-  strokeWeight(2);
-
-
-  rect(
-    20,
-    height - 60,
-    170,
-    40,
-    8
-  );
-
-
-  // PLAYER 2 BOX
-
-  rect(
-    width - 190,
-    height - 60,
-    170,
-    40,
-    8
-  );
-
-
-  noStroke();
-
-  fill(0);
-
-  textAlign(CENTER, CENTER);
-
-  textSize(17);
-
-
-  text(
-    p1Gesture || "Show Hand",
-    105,
-    height - 40
-  );
-
-
-  text(
-    p2Gesture || "Show Hand",
-    width - 105,
-    height - 40
-  );
-}
-
-
-// -------------------------------------
 // START BUTTON
 // -------------------------------------
 
@@ -632,14 +561,32 @@ function drawStartButton() {
 
   textAlign(CENTER, CENTER);
 
-  textSize(28);
+
+  if (modelReady) {
+
+    textSize(28);
 
 
-  text(
-    "START GAME",
-    width / 2,
-    height / 2
-  );
+    text(
+      "START GAME",
+      width / 2,
+      height / 2
+    );
+
+  }
+
+  else {
+
+    textSize(20);
+
+
+    text(
+      "LOADING...",
+      width / 2,
+      height / 2
+    );
+
+  }
 
 
   rectMode(CORNER);
@@ -667,7 +614,7 @@ function drawStartButton() {
   );
 
 
-  // WHAT'S ON THE LINE
+  // BET
 
   textSize(15);
 
@@ -686,15 +633,29 @@ function drawStartButton() {
 
 function mousePressed() {
 
+  // ONLY RESPOND TO CLICKS
+  // INSIDE THE GAME CANVAS
+
   if (
-    gameState === "waiting" ||
-    gameState === "result"
+    mouseX >= 0 &&
+    mouseX <= width &&
+    mouseY >= 0 &&
+    mouseY <= height
   ) {
 
-    updatePlayerInfo();
+    if (
+      (
+        gameState === "waiting" ||
+        gameState === "result"
+      ) &&
+      modelReady
+    ) {
 
-    startRound();
+      updatePlayerInfo();
 
+      startRound();
+
+    }
   }
 }
 
@@ -705,7 +666,7 @@ function mousePressed() {
 
 function startRound() {
 
-  console.log("NEW COUNTDOWN STARTED");
+  console.log("NEW ROUND STARTED");
 
 
   gameState =
@@ -719,9 +680,9 @@ function startRound() {
   roundWinner = "";
 
 
-  p1Samples = [];
+  snapCanvas = null;
 
-  p2Samples = [];
+  snapHands = [];
 
 
   // =====================================
@@ -733,48 +694,64 @@ function startRound() {
 
 
   // =====================================
-  // PAPER AFTER 1.25 SECONDS
+  // PAPER
   // =====================================
 
   setTimeout(function() {
 
-    countdownText =
-      "PAPER";
+    if (gameState === "countdown") {
+
+      countdownText =
+        "PAPER";
+
+    }
 
   }, 1250);
 
 
   // =====================================
-  // SCISSORS AFTER 2.5 SECONDS
+  // SCISSORS
   // =====================================
 
   setTimeout(function() {
 
-    countdownText =
-      "SCISSORS";
+    if (gameState === "countdown") {
+
+      countdownText =
+        "SCISSORS";
+
+    }
 
   }, 2500);
 
 
   // =====================================
-  // SHOOT AFTER 3.75 SECONDS
+  // SHOOT
   // =====================================
 
   setTimeout(function() {
 
-    countdownText =
-      "SHOOT!";
+    if (gameState === "countdown") {
+
+      countdownText =
+        "SHOOT!";
+
+    }
 
   }, 3750);
 
 
   // =====================================
-  // START READING AT 4.4 SECONDS
+  // TAKE THE PHOTO
   // =====================================
 
   setTimeout(function() {
 
-    startReadingHands();
+    if (gameState === "countdown") {
+
+      takeSnapshot();
+
+    }
 
   }, 4400);
 }
@@ -809,8 +786,6 @@ function drawCountdown() {
   textAlign(CENTER, CENTER);
 
 
-  // SHOOT = RED
-
   if (
     countdownText === "SHOOT!"
   ) {
@@ -825,9 +800,6 @@ function drawCountdown() {
     textSize(72);
 
   }
-
-
-  // OTHER WORDS = BLACK
 
   else {
 
@@ -850,104 +822,162 @@ function drawCountdown() {
 
 
 // -------------------------------------
-// START READING HANDS
+// TAKE SNAPSHOT
 // -------------------------------------
 
-function startReadingHands() {
+function takeSnapshot() {
 
-  console.log("READING HANDS");
+  console.log("TAKING SNAPSHOT");
 
 
   gameState =
-    "reading";
+    "processing";
 
 
-  p1Samples = [];
-
-  p2Samples = [];
-
-
-  // READ HANDS EVERY 100 MILLISECONDS
-
-  sampleInterval =
-    setInterval(function() {
-
-      sampleHands();
-
-    }, 100);
+  flashStart =
+    millis();
 
 
   // =====================================
-  // READ FOR 1.75 SECONDS
+  // CREATE A NORMAL HTML CANVAS
   // =====================================
 
-  setTimeout(function() {
-
-    clearInterval(
-      sampleInterval
-    );
+  snapCanvas =
+    document.createElement("canvas");
 
 
-    finishReadingHands();
+  snapCanvas.width =
+    width;
 
-  }, 1750);
+
+  snapCanvas.height =
+    height;
+
+
+  // =====================================
+  // COPY CURRENT VIDEO FRAME
+  // INTO THE CANVAS
+  // =====================================
+
+  let ctx =
+    snapCanvas.getContext("2d");
+
+
+  ctx.drawImage(
+    video.elt,
+    0,
+    0,
+    width,
+    height
+  );
+
+
+  // =====================================
+  // ANALYZE THAT PHOTO
+  // =====================================
+
+  readSnapshot(
+    snapCanvas
+  );
 }
 
 
 // -------------------------------------
-// SAMPLE HANDS
+// READ SNAPSHOT
 // -------------------------------------
 
-function sampleHands() {
+async function readSnapshot(canvas) {
 
-  let playerHands =
-    getPlayerHands();
+  console.log("READING SNAPSHOT");
 
 
-  let p1Gesture =
-    getGesture(
-      playerHands.player1Hand
+  try {
+
+    let results =
+      await handPose.detect(canvas);
+
+
+    // Sometimes first detection can miss
+    // one of the two hands.
+    // Try the SAME PHOTO one more time.
+
+    if (
+      !handForPlayer(results, 0) ||
+      !handForPlayer(results, 1)
+    ) {
+
+      console.log(
+        "TRYING SNAPSHOT AGAIN"
+      );
+
+
+      results =
+        await handPose.detect(canvas);
+
+    }
+
+
+    snapHands =
+      results || [];
+
+  }
+
+  catch (error) {
+
+    console.error(
+      "SNAPSHOT ERROR:",
+      error
     );
 
 
-  let p2Gesture =
-    getGesture(
-      playerHands.player2Hand
-    );
-
-
-  // SAVE PLAYER 1 GESTURE
-
-  if (
-    p1Gesture !== ""
-  ) {
-
-    p1Samples.push(
-      p1Gesture
-    );
+    snapHands = [];
 
   }
 
 
-  // SAVE PLAYER 2 GESTURE
+  finishRound();
+}
 
-  if (
-    p2Gesture !== ""
-  ) {
 
-    p2Samples.push(
-      p2Gesture
-    );
+// -------------------------------------
+// DRAW SNAPSHOT HAND POINTS
+// -------------------------------------
 
+function drawSnapshotHands() {
+
+  for (let hand of snapHands) {
+
+    for (let keypoint of hand.keypoints) {
+
+      let invertedX =
+        width - keypoint.x;
+
+
+      fill(
+        255,
+        0,
+        0
+      );
+
+
+      noStroke();
+
+
+      circle(
+        invertedX,
+        keypoint.y,
+        8
+      );
+    }
   }
 }
 
 
 // -------------------------------------
-// READING HANDS SCREEN
+// PROCESSING SCREEN
 // -------------------------------------
 
-function drawReading() {
+function drawProcessing() {
 
   fill(255, 245);
 
@@ -962,15 +992,13 @@ function drawReading() {
     width / 2,
     height / 2,
     400,
-    160,
+    170,
     15
   );
 
 
   noStroke();
 
-
-  // HOLD
 
   fill(
     255,
@@ -985,17 +1013,15 @@ function drawReading() {
   );
 
 
-  textSize(48);
+  textSize(55);
 
 
   text(
-    "HOLD!",
+    "SHOOT!",
     width / 2,
-    height / 2 - 25
+    height / 2 - 30
   );
 
-
-  // READING MESSAGE
 
   fill(0);
 
@@ -1003,9 +1029,9 @@ function drawReading() {
 
 
   text(
-    "Reading both hands...",
+    "Checking photo...",
     width / 2,
-    height / 2 + 30
+    height / 2 + 35
   );
 
 
@@ -1014,116 +1040,87 @@ function drawReading() {
 
 
 // -------------------------------------
-// FIND MOST COMMON GESTURE
+// CAMERA FLASH
 // -------------------------------------
 
-function mostCommonGesture(samples) {
+function drawFlash() {
+
+  let timeSinceFlash =
+    millis() - flashStart;
+
 
   if (
-    samples.length === 0
+    timeSinceFlash < 350
   ) {
 
-    return "";
+    fill(
+      255,
+      255 * (
+        1 -
+        timeSinceFlash / 350
+      )
+    );
 
+
+    noStroke();
+
+
+    rect(
+      0,
+      0,
+      width,
+      height
+    );
   }
-
-
-  let rockCount = 0;
-
-  let paperCount = 0;
-
-  let scissorsCount = 0;
-
-
-  for (
-    let gesture of samples
-  ) {
-
-
-    if (
-      gesture === "Rock"
-    ) {
-
-      rockCount++;
-
-    }
-
-
-    if (
-      gesture === "Paper"
-    ) {
-
-      paperCount++;
-
-    }
-
-
-    if (
-      gesture === "Scissors"
-    ) {
-
-      scissorsCount++;
-
-    }
-  }
-
-
-  // ROCK
-
-  if (
-    rockCount >= paperCount &&
-    rockCount >= scissorsCount
-  ) {
-
-    return "Rock";
-
-  }
-
-
-  // PAPER
-
-  if (
-    paperCount >= rockCount &&
-    paperCount >= scissorsCount
-  ) {
-
-    return "Paper";
-
-  }
-
-
-  // SCISSORS
-
-  return "Scissors";
 }
 
 
 // -------------------------------------
-// FINISH READING
+// FINISH ROUND
 // -------------------------------------
 
-function finishReadingHands() {
+function finishRound() {
+
+  console.log(
+    "PHOTO HANDS:",
+    snapHands
+  );
+
+
+  let player1Hand =
+    handForPlayer(
+      snapHands,
+      0
+    );
+
+
+  let player2Hand =
+    handForPlayer(
+      snapHands,
+      1
+    );
+
 
   player1Choice =
-    mostCommonGesture(
-      p1Samples
+    getGesture(
+      player1Hand
     );
 
 
   player2Choice =
-    mostCommonGesture(
-      p2Samples
+    getGesture(
+      player2Hand
     );
 
 
   console.log(
-    "Player 1:",
+    "PLAYER 1:",
     player1Choice
   );
 
 
   console.log(
-    "Player 2:",
+    "PLAYER 2:",
     player2Choice
   );
 
@@ -1277,11 +1274,17 @@ function drawResult() {
   text(
     player1Name +
     ": " +
-    player1Choice +
+    (
+      player1Choice ||
+      "Not Read"
+    ) +
     "   |   " +
     player2Name +
     ": " +
-    player2Choice,
+    (
+      player2Choice ||
+      "Not Read"
+    ),
     width / 2,
     height / 2 - 25
   );
@@ -1319,7 +1322,7 @@ function drawResult() {
 
 
   text(
-    "Click anywhere for next round",
+    "Click the game for next round",
     width / 2,
     height / 2 + 90
   );
